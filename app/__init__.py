@@ -63,17 +63,29 @@ def create_app():
         return {"ok": True}, 200
 
     # ===== Fallback route (เข้าเว็บหลักแล้วไปหน้า home อัตโนมัติ) =====
+# ===== Fallback route: เข้า "/" แล้วพาไปหน้าที่มีอยู่จริง =====
     @app.get("/")
     def _root():
         from flask import redirect, url_for
+
+        # 1) พยายามไปหน้า home ของ pages ถ้ามี
         try:
-            # 🔍 ใช้ชื่อ endpoint ปกติ 'pages.home' ถ้ามี
             return redirect(url_for("pages.home"))
         except Exception:
-            # 🔄 fallback ถ้า blueprint ไม่ได้ชื่อ 'pages'
-            return redirect(url_for("home"))
+            pass
 
-    # ✅ debug: แสดง route ทั้งหมด (ลบออกภายหลังได้)
-    print("🧭 URL MAP =", app.url_map)
+        # 2) ถ้าไม่มี pages.home ให้ไปหน้าแอดมินที่มีอยู่จริงใน URL MAP
+        try:
+            return redirect(url_for("admin.admin_home"))
+        except Exception:
+            pass
 
-    return app
+        # 3) สำรอง ไปหน้า inventory หรือ tracking ถ้าอยากเปลี่ยนปลายทาง
+        for endpoint in ("inventory.lend", "tracking.track_index"):
+            try:
+                return redirect(url_for(endpoint))
+            except Exception:
+                continue
+
+        # 4) ถ้ายังไม่เจออะไรเลย แสดงข้อความง่ายๆ
+        return {"status": "ok", "hint": "No pages.home; check pages blueprint registration."}, 200
