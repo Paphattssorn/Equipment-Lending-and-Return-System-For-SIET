@@ -118,7 +118,7 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          railway login --token "$RAILWAY_TOKEN"
+          echo "$RAILWAY_TOKEN" | railway login --apiKey
 
       - name: Link to Railway Project
         env:
@@ -151,3 +151,4 @@ jobs:
           done
           echo "❌ Production not healthy in time"
           exit 1
+
