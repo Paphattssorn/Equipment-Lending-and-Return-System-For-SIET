@@ -90,8 +90,8 @@ jobs:
           name: coverage-xml
           path: coverage.xml
 
-  deploy_prod:
-    name: Deploy Production to Railway
+deploy_prod:
+    name: Deploy to Railway
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
@@ -113,13 +113,30 @@ jobs:
       - name: Install Railway CLI
         run: npm i -g @railway/cli
 
-      - name: Deploy to Railway (Production)
+      - name: Login to Railway (non-interactive)
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
         run: |
           railway --version
-          railway environment --environment production || true
+          railway login --token "$RAILWAY_TOKEN"
+
+      - name: Link to Railway Project
+        env:
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: |
+          # เชื่อมไดเรกทอรีนี้เข้ากับโปรเจกต์ เพื่อให้ up ถูกตัว
+          railway link --project "$RAILWAY_PROJECT_ID"
+
+      - name: Select environment (production)
+        run: |
+          # ✅ ไม่มี --environment flag แล้ว ใช้แบบกำหนดชื่อเลย
+          railway environment production || true
+
+      - name: Deploy to Railway (Production)
+        env:
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+        run: |
+          # ดีพลอยแบบ CI ไม่ต้อง confirm และ detach จาก log
           railway up --service "$RAILWAY_SERVICE" --ci --detach
 
       - name: Health check (Prod)
