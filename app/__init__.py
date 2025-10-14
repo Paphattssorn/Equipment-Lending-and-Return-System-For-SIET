@@ -1,4 +1,3 @@
-# app/__init__.py
 import os
 from flask import Flask
 from dotenv import load_dotenv
@@ -36,7 +35,7 @@ def create_app():
     from app.blueprints.history.routes import history_bp       # user history page
     from app.blueprints.inventory.api_equipment import api_equipment_bp  # REST API
 
-    # ✅ Register ให้ครบ (อย่าลืม pages_bp)
+    # ✅ Register ให้ครบ
     app.register_blueprint(pages_bp)
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(inventory_bp)
@@ -63,11 +62,18 @@ def create_app():
     def healthz():
         return {"ok": True}, 200
 
-    # ===== Fallback route =====
+    # ===== Fallback route (เข้าเว็บหลักแล้วไปหน้า home อัตโนมัติ) =====
     @app.get("/")
     def _root():
         from flask import redirect, url_for
-        # ✅ redirect ไปหน้า home ของ blueprint "pages"
-        return redirect(url_for("pages.home"))
+        try:
+            # 🔍 ใช้ชื่อ endpoint ปกติ 'pages.home' ถ้ามี
+            return redirect(url_for("pages.home"))
+        except Exception:
+            # 🔄 fallback ถ้า blueprint ไม่ได้ชื่อ 'pages'
+            return redirect(url_for("home"))
+
+    # ✅ debug: แสดง route ทั้งหมด (ลบออกภายหลังได้)
+    print("🧭 URL MAP =", app.url_map)
 
     return app
