@@ -36,3 +36,7 @@ def create_app():
     app.register_blueprint(history_bp)
     app.register_blueprint(admin_history_bp)
     return app
+
+
+from dotenv import load_dotenv
+load_dotenv()   # โหลดค่าจากไฟล์ .env เฉพาะตอน dev
