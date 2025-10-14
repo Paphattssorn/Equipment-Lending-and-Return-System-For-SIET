@@ -1,20 +1,16 @@
 # app/repositories/user_repository.py
 from __future__ import annotations
-
-from typing import Optional, Dict, Iterable
-from datetime import datetime, timezone
+from typing import Optional, Dict, Iterable, Any
+from datetime import datetime, date, timezone
 import json
+from decimal import Decimal
+from uuid import UUID
 
 from sqlalchemy import text, bindparam
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError, OperationalError
+
 from app.db.db import SessionLocal
-
-# นำเข้าแบบ optional: PostgreSQL JSONB อาจไม่มีถ้าไม่ได้ใช้ Postgres
-try:
-    from sqlalchemy.dialects.postgresql import JSONB  # type: ignore
-except Exception:  # pragma: no cover
-    JSONB = None  # บน SQLite/อื่น ๆ ไม่ต้องใช้
-
 
 # อนุญาตเฉพาะฟิลด์เหล่านี้เวลา build SQL
 ALLOWED_FIELDS: Iterable[str] = {
@@ -60,6 +56,29 @@ class UserRepository:
         sql = text("SELECT * FROM users WHERE user_id = :uid LIMIT 1")
         row = self.session.execute(sql, {"uid": user_id}).first()
         return self._row_to_dict(row)
+
+    # ---- JSON safe helper (สำคัญสำหรับ JSON/JSONB) ----
+    def _to_json_safe(self, obj: Any) -> Any:
+        """
+        แปลง object ให้ serialize เป็น JSON ได้:
+        - datetime/date -> isoformat()
+        - Decimal -> float (หรือ str ถ้าชอบ)
+        - UUID -> str
+        - dict/list/tuple -> เดินซ้ำ
+        """
+        if obj is None:
+            return None
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        if isinstance(obj, Decimal):
+            return float(obj)
+        if isinstance(obj, UUID):
+            return str(obj)
+        if isinstance(obj, dict):
+            return {k: self._to_json_safe(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple, set)):
+            return [self._to_json_safe(v) for v in obj]
+        return obj  # primitive types
 
     # ===== ensure ตาราง user_audits (กันล้ม ถ้ายังไม่มี) =====
     def _ensure_user_audits_table(self) -> None:
@@ -113,22 +132,25 @@ class UserRepository:
                 return None
             return {k: v for k, v in d.items() if k not in AUDIT_EXCLUDE_FIELDS}
 
-        payload = {"before": _clean(before), "after": _clean(after)}
+        # ตัด field อ่อนไหว + ทำให้ JSON-safe
+        payload_raw = {"before": _clean(before), "after": _clean(after)}
+        payload = self._to_json_safe(payload_raw)
         ts = self._now()
 
-        # เตรียม SQL/params ให้รองรับทั้ง Postgres/SQLite/อื่น ๆ
-        if self._is_postgres() and JSONB is not None:
+        if self._is_postgres():
+            # bind JSONB ด้วย dict ที่ “JSON-safe” แล้ว
             sql = text("""
                 INSERT INTO user_audits (user_id, action, actor_id, diff, created_at)
                 VALUES (:user_id, :action, :actor_id, :diff, :ts)
             """).bindparams(bindparam("diff", type_=JSONB))
-            diff_value = payload  # dict ตรง ๆ ให้ SQLAlchemy จัดการ JSONB
+            diff_value = payload  # dict
         elif self._is_sqlite():
+            # เก็บเป็น TEXT (stringified JSON)
             sql = text("""
                 INSERT INTO user_audits (user_id, action, actor_id, diff, created_at)
                 VALUES (:user_id, :action, :actor_id, :diff, :ts)
             """)
-            diff_value = json.dumps(payload, ensure_ascii=False)  # เก็บเป็น TEXT
+            diff_value = json.dumps(payload, ensure_ascii=False)
         else:
             sql = text("""
                 INSERT INTO user_audits (user_id, action, actor_id, diff, created_at)
@@ -148,7 +170,7 @@ class UserRepository:
             self._ensure_user_audits_table()
             self.session.execute(sql, params)
         except OperationalError as e:
-            # กันเคส race condition/no table
+            # กัน race/no table
             msg = str(e).lower()
             if (("no such table" in msg and "user_audits" in msg)
                 or ("relation" in msg and "user_audits" in msg and "does not exist" in msg)):
@@ -158,7 +180,7 @@ class UserRepository:
                 raise
 
     # ---------- readers ----------
-    def get_user_by_id(self, user_id: int) -> Optional[dict]:
+    def get_user_by_id(self, user_id: int) -> dict | None:
         row = self.session.execute(
             text("SELECT * FROM users WHERE user_id = :uid LIMIT 1"),
             {"uid": user_id},
@@ -173,24 +195,18 @@ class UserRepository:
         return row or self.find_by_employee_id(identity)
 
     def find_by_email(self, email: str) -> Optional[Dict]:
-        row = self.session.execute(
-            text("SELECT * FROM users WHERE email = :email LIMIT 1"),
-            {"email": email},
-        ).first()
+        sql = text("SELECT * FROM users WHERE email = :email LIMIT 1")
+        row = self.session.execute(sql, {"email": email}).first()
         return self._row_to_dict(row)
 
     def find_by_student_id(self, student_id: str) -> Optional[Dict]:
-        row = self.session.execute(
-            text("SELECT * FROM users WHERE student_id = :sid LIMIT 1"),
-            {"sid": student_id},
-        ).first()
+        sql = text("SELECT * FROM users WHERE student_id = :sid LIMIT 1")
+        row = self.session.execute(sql, {"sid": student_id}).first()
         return self._row_to_dict(row)
 
     def find_by_employee_id(self, employee_id: str) -> Optional[Dict]:
-        row = self.session.execute(
-            text("SELECT * FROM users WHERE employee_id = :eid LIMIT 1"),
-            {"eid": employee_id},
-        ).first()
+        sql = text("SELECT * FROM users WHERE employee_id = :eid LIMIT 1")
+        row = self.session.execute(sql, {"eid": employee_id}).first()
         return self._row_to_dict(row)
 
     # ---------- writers ----------
@@ -200,30 +216,14 @@ class UserRepository:
         d.setdefault("created_at", now_)
         d.setdefault("updated_at", now_)
 
-        if self._is_postgres():
-            # Postgres ใช้ RETURNING *
-            cols = ", ".join(d.keys())
-            vals = ", ".join(f":{k}" for k in d.keys())
-            sql = text(f"INSERT INTO users ({cols}) VALUES ({vals}) RETURNING *")
-            row = self.session.execute(sql, d).first()
-            new_row = self._row_to_dict(row)
-        else:
-            # SQLite/อื่น ๆ: แยก INSERT แล้วค่อย SELECT
-            cols = ", ".join(d.keys())
-            vals = ", ".join(f":{k}" for k in d.keys())
-            insert_sql = text(f"INSERT INTO users ({cols}) VALUES ({vals})")
-            self.session.execute(insert_sql, d)
-
-            if self._is_sqlite():
-                # เอา row id ล่าสุดของ connection
-                last_id = self.session.execute(text("SELECT last_insert_rowid()")).scalar()
-                new_row = self._get_by_id(int(last_id)) if last_id is not None else None
-            else:
-                # fallback แบบกลาง ๆ (ถ้าไม่มี last_insert_rowid)
-                last_id = self.session.execute(text("SELECT MAX(user_id) FROM users")).scalar()
-                new_row = self._get_by_id(int(last_id)) if last_id is not None else None
+        cols = ", ".join(d.keys())
+        vals = ", ".join(f":{k}" for k in d.keys())
+        sql = text(f"INSERT INTO users ({cols}) VALUES ({vals}) RETURNING *")
 
         try:
+            row = self.session.execute(sql, d).first()
+            new_row = self._row_to_dict(row)
+
             if audit and new_row:
                 self._insert_user_audit(
                     target_user_id=new_row["user_id"],
@@ -232,12 +232,13 @@ class UserRepository:
                     before=None,
                     after=new_row,
                 )
+
             self.session.commit()
         except IntegrityError:
             self.session.rollback()
             raise
 
-        return new_row or {}
+        return new_row
 
     def update_user(self, user_id: int, changes: Dict, *, actor_id: Optional[int]) -> Optional[Dict]:
         before = self._get_by_id(user_id)
@@ -257,13 +258,11 @@ class UserRepository:
         safe_keys = [k for k in changeset.keys() if k not in {"user_id", "id", "created_at"}]
         sets = ", ".join(f"{k} = :{k}" for k in safe_keys)
 
-        sql = text(f"UPDATE users SET {sets} WHERE user_id = :id RETURNING *") if self._is_postgres() else \
-              text(f"UPDATE users SET {sets} WHERE user_id = :id")
-
+        sql = text(f"UPDATE users SET {sets} WHERE user_id = :id RETURNING *")
         changeset["id"] = user_id
-        row = self.session.execute(sql, changeset).first()
 
-        after = self._row_to_dict(row) if row else self._get_by_id(user_id)
+        row = self.session.execute(sql, changeset).first()
+        after = self._row_to_dict(row)
 
         self._insert_user_audit(
             target_user_id=user_id,
