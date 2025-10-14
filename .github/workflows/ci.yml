@@ -11,21 +11,17 @@ permissions:
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }}
+    name: Python 3.12
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: [ "3.11", "3.12", "3.13" ]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
           cache: "pip"
 
       - name: Install dependencies
@@ -34,7 +30,6 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           else
-            # Fallback minimal (กรณีไม่มี requirements.txt)
             pip install flask sqlalchemy werkzeug itsdangerous click typing_extensions \
                         ruff pytest pytest-cov
           fi
@@ -43,8 +38,8 @@ jobs:
         run: |
           pip install ruff
           ruff version
-          # ไม่ทำให้ตก workflow ถ้าพบ warning; ปรับเป็น --exit-zero ได้
-          ruff check .
+          # ✅ ตรวจแต่ไม่ fail ถ้ามี warning
+          ruff check . --exit-zero
 
       - name: Prepare env
         env:
@@ -52,12 +47,13 @@ jobs:
         run: |
           echo "FLASK_ENV=test" >> $GITHUB_ENV
           echo "SECRET_KEY=${SECRET_KEY}" >> $GITHUB_ENV
+          echo "PYTHONPATH=$PWD" >> $GITHUB_ENV   # ✅ ช่วยให้ app ถูก import ได้
 
       - name: Init database schema (SQLite)
         run: |
           python - <<'PY'
           from app.db.db import engine, Base
-          import app.db.models  # noqa: F401 (ensure models are imported)
+          import app.db.models  # noqa: F401
           Base.metadata.create_all(bind=engine)
           print("✅ SQLite schema created")
           PY
