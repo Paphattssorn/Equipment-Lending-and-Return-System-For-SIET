@@ -114,18 +114,13 @@ jobs:
       - name: Install Railway CLI
         run: npm i -g @railway/cli
 
-      - name: Link & Deploy to Railway (Production)
+      # ❌ ไม่ต้อง login/link/เลือก env ถ้าใช้ Project Token
+      - name: Deploy to Railway (Production)
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}   # ← ใส่ Project Token ของ env=production
           RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
         run: |
           railway --version
-          echo "🔗 Linking to project..."
-          railway link --project "$RAILWAY_PROJECT_ID"
-          echo "🌱 Selecting environment: production"
-          railway environment production || true
-          echo "🚀 Deploying service..."
           railway up --service "$RAILWAY_SERVICE" --ci --detach
 
       - name: Health check (Prod)
@@ -143,4 +138,3 @@ jobs:
           done
           echo "❌ Production not healthy in time"
           exit 1
-
