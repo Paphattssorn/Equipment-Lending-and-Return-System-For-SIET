@@ -1,3 +1,4 @@
+# app/__init__.py
 import os
 from flask import Flask
 from dotenv import load_dotenv
@@ -6,12 +7,11 @@ from sqlalchemy import text
 from .config import Config
 from app.db.db import Base, engine
 
-# โหลด .env เฉพาะตอน dev (Railway จะใช้ Variables เอง)
+# โหลด .env เฉพาะตอน dev
 load_dotenv()
 
 
 def create_app():
-    # ===== Flask App =====
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
     # ===== Secret Key / Config =====
@@ -24,7 +24,7 @@ def create_app():
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
     # ===== Register Blueprints =====
-    from .blueprints.pages import pages_bp                     # home, about, etc.
+    from .blueprints.pages import pages_bp                     # home, etc.
     from .blueprints.auth import auth_bp                       # /auth/*
     from .blueprints.inventory import inventory_bp             # /inventory/*
     from .blueprints.tracking import tracking_bp               # /track-status/*
@@ -36,6 +36,7 @@ def create_app():
     from app.blueprints.history.routes import history_bp       # user history page
     from app.blueprints.inventory.api_equipment import api_equipment_bp  # REST API
 
+    # ✅ Register ให้ครบ (อย่าลืม pages_bp)
     app.register_blueprint(pages_bp)
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(inventory_bp)
@@ -48,10 +49,8 @@ def create_app():
 
     # ===== Database bootstrap =====
     with app.app_context():
-        # ต้อง import models ให้ metadata รู้จักทุกตารางก่อน
         from app.db import models  # noqa: F401
 
-        # ป้องกัน race condition ตอนสร้างตาราง (กรณีหลาย worker)
         with engine.begin() as conn:
             try:
                 conn.execute(text("SELECT pg_advisory_lock(987654321)"))
@@ -59,15 +58,16 @@ def create_app():
             finally:
                 conn.execute(text("SELECT pg_advisory_unlock(987654321)"))
 
-    # ===== Health check สำหรับ Railway =====
+    # ===== Health check =====
     @app.get("/healthz")
     def healthz():
         return {"ok": True}, 200
 
-    # ===== Fallback route: ให้ "/" เด้งไปหน้า home =====
+    # ===== Fallback route =====
     @app.get("/")
     def _root():
         from flask import redirect, url_for
+        # ✅ redirect ไปหน้า home ของ blueprint "pages"
         return redirect(url_for("pages.home"))
 
     return app
