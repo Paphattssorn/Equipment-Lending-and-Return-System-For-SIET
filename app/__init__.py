@@ -1,3 +1,4 @@
+# app/__init__.py
 import os
 from flask import Flask
 from dotenv import load_dotenv
@@ -6,36 +7,29 @@ from sqlalchemy import text
 from .config import Config
 from app.db.db import Base, engine
 
-# โหลด .env เฉพาะตอน dev
 load_dotenv()
-
 
 def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
-    # ===== Secret Key / Config =====
+    # ----- Config -----
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "super-secret-key-change-this")
     app.config.from_object(Config)
 
-    # ===== Upload config =====
+    # ----- Uploads -----
     app.config["UPLOAD_FOLDER"] = os.path.join(app.static_folder, "uploads", "equipment")
     app.config["ALLOWED_IMAGE_EXT"] = {"jpg", "jpeg", "png", "gif", "webp"}
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
-    # ===== Register Blueprints =====
-    from .blueprints.pages import pages_bp                     # home, etc.
-    from .blueprints.auth import auth_bp                       # /auth/*
-    from .blueprints.inventory import inventory_bp             # /inventory/*
-    from .blueprints.tracking import tracking_bp               # /track-status/*
-    from app.blueprints.admin.routes import (                  # admin scopes
-        admin_bp,
-        admin_users_bp,
-        admin_history_bp,
-    )
-    from app.blueprints.history.routes import history_bp       # user history page
-    from app.blueprints.inventory.api_equipment import api_equipment_bp  # REST API
+    # ----- Blueprints -----
+    from .blueprints.pages import pages_bp
+    from .blueprints.auth import auth_bp
+    from .blueprints.inventory import inventory_bp
+    from .blueprints.tracking import tracking_bp
+    from app.blueprints.admin.routes import admin_bp, admin_users_bp, admin_history_bp
+    from app.blueprints.history.routes import history_bp
+    from app.blueprints.inventory.api_equipment import api_equipment_bp
 
-    # ✅ Register ให้ครบ
     app.register_blueprint(pages_bp)
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(inventory_bp)
@@ -46,46 +40,33 @@ def create_app():
     app.register_blueprint(history_bp)
     app.register_blueprint(api_equipment_bp)
 
-    # ===== Database bootstrap =====
+    # ----- DB bootstrap -----
     with app.app_context():
         from app.db import models  # noqa: F401
-
         with engine.begin() as conn:
             try:
-                conn.execute(text("SELECT pg_advisory_lock(987654321)"))
+                if engine.dialect.name == "postgresql":
+                    conn.execute(text("SELECT pg_advisory_lock(987654321)"))
                 Base.metadata.create_all(bind=conn)
             finally:
-                conn.execute(text("SELECT pg_advisory_unlock(987654321)"))
+                if engine.dialect.name == "postgresql":
+                    conn.execute(text("SELECT pg_advisory_unlock(987654321)"))
 
-    # ===== Health check =====
+    # ----- Health check -----
     @app.get("/healthz")
     def healthz():
         return {"ok": True}, 200
 
-    # ===== Fallback route (เข้าเว็บหลักแล้วไปหน้า home อัตโนมัติ) =====
-# ===== Fallback route: เข้า "/" แล้วพาไปหน้าที่มีอยู่จริง =====
+    # ----- Root redirect (เลือกหน้าที่มีอยู่จริง) -----
     @app.get("/")
     def _root():
         from flask import redirect, url_for
-
-        # 1) พยายามไปหน้า home ของ pages ถ้ามี
-        try:
-            return redirect(url_for("pages.home"))
-        except Exception:
-            pass
-
-        # 2) ถ้าไม่มี pages.home ให้ไปหน้าแอดมินที่มีอยู่จริงใน URL MAP
-        try:
-            return redirect(url_for("admin.admin_home"))
-        except Exception:
-            pass
-
-        # 3) สำรอง ไปหน้า inventory หรือ tracking ถ้าอยากเปลี่ยนปลายทาง
-        for endpoint in ("inventory.lend", "tracking.track_index"):
+        for endpoint in ("pages.home", "admin.admin_home", "inventory.lend", "tracking.track_index"):
             try:
                 return redirect(url_for(endpoint))
             except Exception:
-                continue
+                pass
+        return {"status": "ok", "hint": "No landing page found."}, 200
 
-        # 4) ถ้ายังไม่เจออะไรเลย แสดงข้อความง่ายๆ
-        return {"status": "ok", "hint": "No pages.home; check pages blueprint registration."}, 200
+    # ✅ สำคัญ: ต้อง return app
+    return app
