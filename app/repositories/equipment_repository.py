@@ -6,7 +6,7 @@ from app.db.db import SessionLocal
 from app.db.models import Equipment, EquipmentImage, StockMovement
 
 # รองรับชื่อความสัมพันธ์รูปทั้งสองแบบ
-IMAGES_REL = getattr(Equipment, "images", None) or getattr(Equipment, "equipment_images")
+IMAGES_REL = getattr(Equipment, "equipment_images", None) or getattr(Equipment, "images", None)
 
 class EquipmentRepository:
     def __init__(self, session: Optional[Session] = None):

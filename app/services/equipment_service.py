@@ -11,7 +11,8 @@ class EquipmentService:
     def __init__(self, repo: Optional[EquipmentRepository] = None):
         self.repo = repo or EquipmentRepository()
         # เลือกชื่อ relationship ของรูปให้ตรงกับ ORM (images หรือ equipment_images)
-        self._img_rel = "images" if hasattr(Equipment, "images") else "equipment_images"
+        self._img_rel = "equipment_images" if hasattr(Equipment, "equipment_images") else "images"
+
 
     # ---------- List / Get ----------
     def list(self, q: str = "", category: str = ""):
