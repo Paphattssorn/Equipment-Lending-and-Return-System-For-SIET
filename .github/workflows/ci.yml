@@ -48,7 +48,9 @@ jobs:
             pip install flask sqlalchemy werkzeug itsdangerous click typing_extensions \
                         ruff pytest pytest-cov
           fi
-
+      - name: Install ruff
+        run: python -m pip install ruff
+        
       - name: Lint (ruff)
         run: |
           ruff --version
