@@ -24,7 +24,7 @@ def create_app():
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
     # ===== Register Blueprints =====
-    from .blueprints.pages import pages_bp                     # home, etc.
+    from .blueprints.pages import pages_bp                     # home, about, etc.
     from .blueprints.auth import auth_bp                       # /auth/*
     from .blueprints.inventory import inventory_bp             # /inventory/*
     from .blueprints.tracking import tracking_bp               # /track-status/*
@@ -46,12 +46,12 @@ def create_app():
     app.register_blueprint(history_bp)
     app.register_blueprint(api_equipment_bp)
 
-    # ===== DB bootstrap (สร้างตารางครั้งแรก + กัน race ด้วย advisory lock) =====
+    # ===== Database bootstrap =====
     with app.app_context():
-        # สำคัญ: ต้อง import models ให้ metadata รู้จักทุกตารางก่อน create_all()
+        # ต้อง import models ให้ metadata รู้จักทุกตารางก่อน
         from app.db import models  # noqa: F401
 
-        # กันกรณีหลาย worker เรียกพร้อมกันด้วย Postgres advisory lock
+        # ป้องกัน race condition ตอนสร้างตาราง (กรณีหลาย worker)
         with engine.begin() as conn:
             try:
                 conn.execute(text("SELECT pg_advisory_lock(987654321)"))
@@ -59,9 +59,15 @@ def create_app():
             finally:
                 conn.execute(text("SELECT pg_advisory_unlock(987654321)"))
 
-    # ===== Health check =====
+    # ===== Health check สำหรับ Railway =====
     @app.get("/healthz")
     def healthz():
         return {"ok": True}, 200
+
+    # ===== Fallback route: ให้ "/" เด้งไปหน้า home =====
+    @app.get("/")
+    def _root():
+        from flask import redirect, url_for
+        return redirect(url_for("pages.home"))
 
     return app
