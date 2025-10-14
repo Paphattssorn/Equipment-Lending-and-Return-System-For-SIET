@@ -89,55 +89,68 @@ class UserRepository:
             """)
         self.session.execute(create_sql)
 
-    def _insert_user_audit(
-        self,
-        *,
-        target_user_id: int,
-        action: str,
-        actor_id: Optional[int],
-        before: Optional[Dict],
-        after: Optional[Dict],
-    ) -> None:
-        """เขียน log ลง user_audits ตาม schema ใหม่ และตัดฟิลด์อ่อนไหวออก"""
-        def _clean(d: Optional[Dict]) -> Optional[Dict]:
-            if d is None:
-                return None
-            return {k: v for k, v in d.items() if k not in AUDIT_EXCLUDE_FIELDS}
+from sqlalchemy import text, bindparam
+from sqlalchemy.dialects.postgresql import JSONB
+import json
+from datetime import datetime, timezone
 
-        payload = {"before": _clean(before), "after": _clean(after)}
-        ts = self._now()
+def _insert_user_audit(
+    self,
+    *,
+    target_user_id: int,
+    action: str,
+    actor_id: Optional[int],
+    before: Optional[Dict],
+    after: Optional[Dict],
+) -> None:
+    def _clean(d: Optional[Dict]) -> Optional[Dict]:
+        if d is None:
+            return None
+        return {k: v for k, v in d.items() if k not in AUDIT_EXCLUDE_FIELDS}
 
-        # expression ของ JSON ต่อ dialect
-        if self._is_sqlite():
-            diff_expr = ":diff"            # TEXT/JSON (SQLite)
-        elif self._is_postgres():
-            diff_expr = ":diff::json"      # JSON (Postgres)
-        else:
-            diff_expr = "CAST(:diff AS VARCHAR)"
+    payload = {"before": _clean(before), "after": _clean(after)}
+    ts = self._now()
 
-        sql = text(f"""
+    if self._is_postgres():
+        # bind type เป็น JSONB แล้วใช้ :diff ตรงๆ
+        sql = text("""
             INSERT INTO user_audits (user_id, action, actor_id, diff, created_at)
-            VALUES (:user_id, :action, :actor_id, {diff_expr}, :ts)
+            VALUES (:user_id, :action, :actor_id, :diff, :ts)
+        """).bindparams(bindparam("diff", type_=JSONB))
+        diff_value = payload                                  # dict ตรงๆ
+    elif self._is_sqlite():
+        sql = text("""
+            INSERT INTO user_audits (user_id, action, actor_id, diff, created_at)
+            VALUES (:user_id, :action, :actor_id, :diff, :ts)
         """)
-        params = {
-            "user_id": target_user_id,
-            "action": action,
-            "actor_id": actor_id,
-            "diff": json.dumps(payload, default=str),
-            "ts": ts,
-        }
+        diff_value = json.dumps(payload, ensure_ascii=False)  # เก็บเป็น TEXT
+    else:
+        sql = text("""
+            INSERT INTO user_audits (user_id, action, actor_id, diff, created_at)
+            VALUES (:user_id, :action, :actor_id, :diff, :ts)
+        """)
+        diff_value = json.dumps(payload, ensure_ascii=False)
 
-        try:
+    params = {
+        "user_id": target_user_id,
+        "action": action,
+        "actor_id": actor_id,
+        "diff": diff_value,
+        "ts": ts,
+    }
+
+    try:
+        self._ensure_user_audits_table()
+        self.session.execute(sql, params)
+    except OperationalError as e:
+        msg = str(e).lower()
+        if (("no such table" in msg and "user_audits" in msg)
+            or ("relation" in msg and "user_audits" in msg and "does not exist" in msg)):
             self._ensure_user_audits_table()
             self.session.execute(sql, params)
-        except OperationalError as e:
-            # กันเคส race condition/no table
-            msg = str(e).lower()
-            if ("no such table" in msg and "user_audits" in msg) or ("relation" in msg and "user_audits" in msg and "does not exist" in msg):
-                self._ensure_user_audits_table()
-                self.session.execute(sql, params)
-            else:
-                raise
+        else:
+            raise
+
 
     # ---------- readers ----------
 # === ใส่เพิ่มใน class UserRepository ===
