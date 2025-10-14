@@ -50,7 +50,7 @@ jobs:
           fi
       - name: Install ruff
         run: python -m pip install ruff
-        
+
       - name: Lint (ruff)
         run: |
           ruff --version
@@ -73,7 +73,9 @@ jobs:
           app = create_app()
           print("✅ App created:", app.name)
           PY
-
+      - name: Install pytest
+        run: |
+          python -m pip install pytest pytest-cov
       - name: Run tests (pytest)
         if: ${{ hashFiles('**/tests/**') != '' }}
         run: |
