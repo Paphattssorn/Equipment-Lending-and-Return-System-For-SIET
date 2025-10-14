@@ -55,7 +55,6 @@ jobs:
       - name: Lint (ruff)
         run: |
           python -m ruff --version
-          # เข้มงวด: ให้ fail ถ้ามีปัญหา
           python -m ruff check .
 
       - name: Init database schema (SQLite)
@@ -91,55 +90,6 @@ jobs:
           name: coverage-xml
           path: coverage.xml
 
-  deploy_preview:
-    name: Deploy Preview to Railway
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref != 'refs/heads/main'    # สำหรับ PR / develop
-    environment:
-      name: preview
-      url: ${{ secrets.HEALTHCHECK_URL_PREVIEW }}
-    concurrency:
-      group: deploy-preview-${{ github.ref }}
-      cancel-in-progress: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node (for Railway CLI)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Railway CLI
-        run: npm i -g @railway/cli
-
-      - name: Deploy to Railway (Preview)
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
-        run: |
-          railway --version
-          # เลือก env ชื่อ develop ถ้าคุณตั้งใน Railway (ข้ามได้ถ้าใช้ default)
-          railway environment --environment develop || true
-          railway up --service "$RAILWAY_SERVICE" --ci --detach
-
-      - name: Health check (Preview)
-        env:
-          URL: ${{ secrets.HEALTHCHECK_URL_PREVIEW }}
-        run: |
-          echo "Health check: $URL"
-          for i in {1..20}; do
-            if curl -fsS "$URL"; then
-              echo "✅ Preview healthy"
-              exit 0
-            fi
-            echo "⏳ Waiting for app to become healthy ($i/20)..."
-            sleep 10
-          done
-          echo "❌ Preview not healthy in time"
-          exit 1
-
   deploy_prod:
     name: Deploy Production to Railway
     needs: test
@@ -147,7 +97,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     environment:
       name: production
-      url: ${{ secrets.HEALTHCHECK_URL_PROD }}
+      url: ${{ vars.HEALTHCHECK_URL_PROD }}
     concurrency:
       group: deploy-prod
       cancel-in-progress: true
@@ -169,13 +119,12 @@ jobs:
           RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
         run: |
           railway --version
-          # เลือก env ชื่อ production ถ้าคุณตั้งใน Railway (ข้ามได้ถ้าใช้ default)
           railway environment --environment production || true
           railway up --service "$RAILWAY_SERVICE" --ci --detach
 
       - name: Health check (Prod)
         env:
-          URL: ${{ secrets.HEALTHCHECK_URL_PROD }}
+          URL: ${{ vars.HEALTHCHECK_URL_PROD }}
         run: |
           echo "Health check: $URL"
           for i in {1..30}; do
