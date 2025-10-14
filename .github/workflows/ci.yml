@@ -114,26 +114,18 @@ jobs:
       - name: Install Railway CLI
         run: npm i -g @railway/cli
 
-      - name: Login to Railway (non-interactive)
+      - name: Link & Deploy to Railway (Production)
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          echo "$RAILWAY_TOKEN" | railway login --apiKey
-
-      - name: Link to Railway Project
-        env:
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-        run: |
-          railway link --project "$RAILWAY_PROJECT_ID"
-
-      - name: Select environment (production)
-        run: |
-          railway environment production || true
-
-      - name: Deploy to Railway (Production)
-        env:
           RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
         run: |
+          railway --version
+          echo "🔗 Linking to project..."
+          railway link --project "$RAILWAY_PROJECT_ID"
+          echo "🌱 Selecting environment: production"
+          railway environment production || true
+          echo "🚀 Deploying service..."
           railway up --service "$RAILWAY_SERVICE" --ci --detach
 
       - name: Health check (Prod)
