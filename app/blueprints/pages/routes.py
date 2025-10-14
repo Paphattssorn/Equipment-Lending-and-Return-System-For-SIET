@@ -6,7 +6,7 @@ from app.services.home_service import HomeService
 pages_bp = Blueprint("pages", __name__)
 svc = HomeService()
 
-@pages_bp.get("/")
+@pages_bp.route("/")
 def home():
     # ดึง user_id แบบสั้น ๆ ครอบคลุม 3 แหล่ง
     user_id = (
