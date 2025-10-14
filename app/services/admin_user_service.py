@@ -69,7 +69,7 @@ class AdminUserService:
         name   = v.norm(data.get("name"))   or (current.get("name") or "")
         email  = (v.norm(data.get("email")) or (current.get("email") or "")).lower()
         phone  = v.norm(data.get("phone"))  or (current.get("phone") or "")
-        major  = v.norm(data.get("major"))  or (current.get("major") or "")
+        major = v.norm(data.get("major")) or (current.get("major") or "") 
         mtype  = (v.norm(data.get("member_type")) or (current.get("member_type") or "")).lower()
         gender = (v.norm(data.get("gender")) or (current.get("gender") or "")).lower()
         role   = (v.norm(data.get("role")) or (current.get("role") or "member")).lower()
@@ -86,6 +86,8 @@ class AdminUserService:
             return f"gender must be one of: {', '.join(ALLOWED_GENDERS)}"
         if role and role not in ALLOWED_ROLES:
             return f"role must be one of: {', '.join(ALLOWED_ROLES)}"
+        if len(major) > 100 : 
+            return "major is too long"
 
         # ตรวจอีเมลซ้ำเฉพาะกรณีเปลี่ยนจริง
         if email and email != (current.get("email") or "").lower():

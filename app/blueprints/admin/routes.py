@@ -1,18 +1,15 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, session  # ✅ เพิ่ม session
-from sqlalchemy import text  
+from sqlalchemy import text
+from flask import Blueprint, render_template, request, flash, redirect, url_for, session
+
+# ===== Internal imports (app package) =====
 from app.db.db import SessionLocal
 from app.repositories.user_repository import UserRepository
-from app.services.admin_user_service import AdminUserService
-from app.utils.decorators import staff_required
-from app.services import renewal_service
-from app.db.models import Renewal
-from flask_login import current_user
-
-
-
-# ---- สำหรับประวัติยืม-คืน (admin) ----
 from app.repositories.history_repository import RentHistoryRepository
+from app.services.admin_user_service import AdminUserService
 from app.services.history_service import BorrowHistoryService
+from app.services import renewal_service
+from app.utils.decorators import staff_required
+from app.controllers.admin_history_controller import AdminHistoryController
 
 
 # ==============================
@@ -154,7 +151,6 @@ def admin_history_index():
     # ใช้ template เดิมที่คุณมีอยู่แล้ว
     return render_template("pages_history/admin_all_history.html", items=all_items)
 
-from app.controllers.admin_history_controller import AdminHistoryController
 
 # ใช้ factory/guard เดิมของคุณ
 AdminHistoryController(
@@ -193,8 +189,6 @@ def confrim_add_time_history():
     )
 
 
-from flask import request, session, redirect, url_for, flash
-from app.services import renewal_service
 
 
 @admin_bp.post("/approve_renewal/<int:renewal_id>")

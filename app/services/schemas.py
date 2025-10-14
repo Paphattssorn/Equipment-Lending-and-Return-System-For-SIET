@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, Dict
+from typing import Dict
 from datetime import datetime
 
 @dataclass
@@ -24,6 +24,7 @@ class TopBorrowedDTO:
     name: str
     code: str
     borrow_count: int
+    image_path: str | None = None   # 👈 เพิ่มตรงนี้
 
 @dataclass
 class OutstandingDTO:
@@ -36,10 +37,4 @@ class OutstandingDTO:
     is_overdue: bool
     overdue_days: int
 
-@dataclass
-class TopBorrowedDTO:
-    equipment_id: int
-    name: str
-    code: str
-    borrow_count: int
-    image_path: str | None = None   # 👈 เพิ่มตรงนี้
+

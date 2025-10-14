@@ -1,6 +1,9 @@
 from app.db.db import SessionLocal
 from app.db.models import Subject  # ✅ เพิ่ม import
 from app.db.models import User    # ✅ เพิ่ม import
+from datetime import datetime
+from sqlalchemy.exc import SQLAlchemyError
+from app.db.models import RentReturn, Equipment
 
 def get_all_subjects():
     """
@@ -39,10 +42,6 @@ def get_all_users():
         db.close()
 
 
-from datetime import datetime
-from sqlalchemy.exc import SQLAlchemyError
-from app.db.db import SessionLocal
-from app.db.models import RentReturn, Equipment, User
 
 
 def insert_rent_record(data):
