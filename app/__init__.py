@@ -53,7 +53,7 @@ def create_app():
                     conn.execute(text("SELECT pg_advisory_unlock(987654321)"))
 
     # ----- Health check -----
-    @app.get("/healthz")
+    @app.get("/health")
     def healthz():
         return {"ok": True}, 200
 
