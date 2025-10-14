@@ -2,8 +2,10 @@ from __future__ import annotations
 from typing import Optional, Dict, Iterable
 from datetime import datetime, timezone
 import json
-
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
+from sqlalchemy.dialects.postgresql import JSONB
+import json
+from datetime import datetime, timezone
 from sqlalchemy.exc import IntegrityError, OperationalError
 from app.db.db import SessionLocal
 
@@ -89,10 +91,6 @@ class UserRepository:
             """)
         self.session.execute(create_sql)
 
-from sqlalchemy import text, bindparam
-from sqlalchemy.dialects.postgresql import JSONB
-import json
-from datetime import datetime, timezone
 
 def _insert_user_audit(
     self,
