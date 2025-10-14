@@ -90,7 +90,7 @@
               </div>
 
               <div class="equip-card__actions">
-                <a class="btn-outline" href="{{ url_for('inventory.lend_device') }}">ดูรายละเอียด</a>
+                <a class="btn-outline" href="{{ url_for('inventory.equipment_detail', eid=item.equipment_id) }}">ดูรายละเอียด</a>
                 <a class="btn-borrow"
                    href="{{ url_for('inventory.lend') }}?codes={{ item.code }}&name={{ item.name|urlencode }}&image={{ item.image_path|urlencode }}">
                    ยืม
